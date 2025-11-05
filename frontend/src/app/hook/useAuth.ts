@@ -21,7 +21,7 @@ export const useAuth = () => {
 
   const checkAuth = async () => {
     try {
-      const response = await api.get('/api/auth/me', { withCredentials: true });
+      const response = await api.get('/auth/me', { withCredentials: true });
       setUser(response.data.user);
     } catch {
       setUser(null);
@@ -32,7 +32,7 @@ export const useAuth = () => {
 
   const login = async (username: string, email: string, password: string): Promise<AuthResponse> => {
     try {
-      const response = await api.post('/api/auth/login', {
+      const response = await api.post('/auth/login', {
         username,
         email,
         password
@@ -50,7 +50,7 @@ export const useAuth = () => {
 
   const register = async (username: string, email: string, password: string): Promise<AuthResponse> => {
     try {
-      const response = await api.post('/api/auth/register', {
+      const response = await api.post('/auth/register', {
         username,
         email,
         password
@@ -68,7 +68,7 @@ export const useAuth = () => {
 
   const logout = async (): Promise<void> => {
     try {
-      await api.post('/api/auth/logout', {}, { withCredentials: true });
+      await api.post('/auth/logout', {}, { withCredentials: true });
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -78,7 +78,7 @@ export const useAuth = () => {
 
   const promoteUser = async (username: string): Promise<AuthResponse> => {
     try {
-      const response = await api.post('/api/users/promote', { username }, { withCredentials: true });
+      const response = await api.post('/users/promote', { username }, { withCredentials: true });
       return { success: true, message: response.data.message };
     } catch (error: unknown) {
       console.error('Promotion error:', error);

@@ -12,6 +12,7 @@
 # testing
 /coverage
 test-api.sqlite
+test-api.sh
 /test-api.sqlite
 
 
@@ -38,6 +39,11 @@ yarn-error.log*
 
 # prisma
 /prisma/dev.db*
+
+# test files
+test-*.js
+test-*.sh
+cookies.txt
 
 # vercel
 .vercel

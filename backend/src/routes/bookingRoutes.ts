@@ -1,15 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { adminMiddleware, authMiddleware } from '../middleware/auth';
-import prisma from '../config/prisma';
-
+import { BookingService } from '../services/bookingService';
 
 const router = Router();
 
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
     const { room_id, user_id, start_time, end_time, description } = req.body;
     const currentUser = req.user!;
-
-    console.log('Create booking request:', { room_id, user_id, start_time, end_time, description });
 
     if (!room_id || !start_time || !end_time) {
         return res.status(400).json({ message: 'room_id, start_time, and end_time are required' });
@@ -22,166 +19,120 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     }
 
     try {
-        const conflict = await prisma.booking.findFirst({
-            where: {
-                roomId: room_id,
-                OR: [
-                    {
-                        startTime: { 
-                            gte: new Date(start_time),
-                            lte: new Date(end_time)
-                        }
-                    },
-                    {
-                        endTime: { 
-                            gte: new Date(start_time),
-                            lte: new Date(end_time)
-                        }
-                    },
-                    {
-                        startTime: { lte: new Date(start_time) },
-                        endTime: { gte: new Date(end_time) }
-                    }
-                ]
-            }
+        const booking = await BookingService.createBookingSafe({
+            userId: bookingUserId,
+            roomId: room_id,
+            startTime: new Date(start_time),
+            endTime: new Date(end_time),
+            description
         });
 
-        if (conflict) {
-            return res.status(400).json({ message: 'Room is already booked for this time' });
-        }
-
-        const booking = await prisma.booking.create({
-            data: {
-                roomId: room_id,
-                userId: bookingUserId,
-                startTime: new Date(start_time),
-                endTime: new Date(end_time),
-                description
-            },
-            include: {
-                room: true,
-                user: { select: { id: true, username: true, email: true, role: true } }
-            }
-        });
-
-        res.status(201).json(booking)
+        res.status(201).json(booking);
     } catch (e) {
-        console.error('Booking creation error:', e);
+        if (e instanceof Error) {
+            if (e.message.includes('already booked') || e.message.includes('unique_booking')) {
+                return res.status(409).json({ message: 'Room is already booked for this time period' });
+            }
+        }
+        
         res.status(500).json({ message: 'Error creating booking', error: e });
     }
 });
 
-router.get('/', authMiddleware, adminMiddleware, async (req: Request, res: Response) => {
+// Get all bookings (admin only) or user's bookings
+router.get('/', authMiddleware, async (req: Request, res: Response) => {
     try {
-        const booking = await prisma.booking.findMany({
-            include: {
-                room: true,
-                user: { select: { id: true, username: true, email: true, role: true } }
-            },
-            orderBy: [{ startTime: 'desc' }]
-        });
-        res.json(booking);
+        const user = req.user!;
+        let bookings;
+        
+        if (user.role === 'admin') {
+            // Admin sees all active bookings
+            bookings = await BookingService.getActiveBookings();
+        } else {
+            // User sees only their bookings
+            bookings = await BookingService.getActiveBookings(user.id);
+        }
+        
+        res.json(bookings);
     } catch (e) {
         res.status(500).json({ message: 'Error fetching bookings', error: e });
     }
 });
 
+// Get booking by ID
 router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
     try {
-        const booking = await prisma.booking.findUnique({ 
-            where: { id: parseInt(req.params.id) },
-            include: {
-                room: true,
-                user: { select: { id: true, username: true, email: true, role: true } }
-            }
-        });
-        if (!booking) return res.status(404).json({ message: 'Booking not found' });
+        const booking = await BookingService.getBookingById(parseInt(req.params.id));
+        
+        if (!booking) {
+            return res.status(404).json({ message: 'Booking not found' });
+        }
+        
+        const user = req.user!;
+        if (user.role !== 'admin' && booking.userId !== user.id) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+        
         res.json(booking);
     } catch (e) {
-        res.status(500).json({ message: 'Error fetching bookings', error: e });
+        res.status(500).json({ message: 'Error fetching booking', error: e });
     }
 });
 
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
-    const user = req.user!;
-    const { startTime, endTime, description } = req.body;
-
+// Check availability
+router.post('/check-availability', authMiddleware, async (req: Request, res: Response) => {
     try {
-        const booking = await prisma.booking.findUnique({ where: { id: parseInt(req.params.id) } });
-        if (!booking) return res.status(404).json({ message: 'Booking not found' });
+        const { roomId, startTime, endTime, excludeBookingId } = req.body;
 
-        if (user.role !== 'admin' && booking.userId !== user.id) {
-            return res.status(403).json({ message: 'Not authorized' });
+        if (!roomId || !startTime || !endTime) {
+            return res.status(400).json({ message: 'Missing required fields' });
         }
 
-        const conflict = await prisma.booking.findFirst({
-            where: {
-                roomId: booking.roomId,
-                id: { not: booking.id },
-                OR: [
-                    { 
-                        startTime: { 
-                            gte: new Date(startTime),
-                            lte: new Date(endTime)
-                        }
-                    },
-                    { 
-                        endTime: { 
-                            gte: new Date(startTime),
-                            lte: new Date(endTime)
-                        }
-                    },
-                    { 
-                        startTime: { lte: new Date(startTime) }, 
-                        endTime: { gte: new Date(endTime) } 
-                    }
-                ]
-            }
-        });
+        const isAvailable = await BookingService.checkRoomAvailability(
+            parseInt(roomId),
+            new Date(startTime),
+            new Date(endTime),
+            excludeBookingId ? parseInt(excludeBookingId) : undefined
+        );
 
-        if (conflict) return res.status(400).json({ message: 'Room is already booked for this time' });
-
-        const updatedBooking = await prisma.booking.update({
-            where: { id: parseInt(req.params.id) },
-            data: { 
-                startTime: new Date(startTime), 
-                endTime: new Date(endTime), 
-                description 
-            },
-            include: {
-                room: true,
-                user: { select: { id: true, username: true, email: true, role: true } }
-            }
-        });
-        res.json(updatedBooking);
-    } catch (e) {
-        res.status(500).json({ message: 'Error updating booking', error: e });
+        res.json({ available: isAvailable });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to check availability' });
     }
 });
 
+// Cancel booking (soft delete)
 router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
     const user = req.user!;
+    
     try {
-        const booking = await prisma.booking.findUnique({ where: { id: parseInt(req.params.id) } });
-        if (!booking) return res.status(404).json({ message: 'Booking not found' });
-
-        if (user.role !== 'admin' && booking.userId !== user.id) {
-            return res.status(403).json({ message: 'Not authorized' });
-        }
-
+        const bookingId = parseInt(req.params.id);
+        
         if (user.role !== 'admin') {
-            const now = new Date();
-            const bookingStart = new Date(booking.startTime);
+            const booking = await BookingService.getBookingById(bookingId);
             
-            if (bookingStart <= now) {
+            if (!booking) {
+                return res.status(404).json({ message: 'Booking not found' });
+            }
+            
+            if (booking.userId !== user.id) {
+                return res.status(403).json({ message: 'Not authorized' });
+            }
+            
+            const now = new Date();
+            if (new Date(booking.startTime) <= now) {
                 return res.status(400).json({ message: 'Cannot cancel past or ongoing bookings' });
             }
         }
 
-        await prisma.booking.delete({ where: { id: parseInt(req.params.id) } });
-        res.json({ message: 'Booking cancelled successfully' });
+        const cancelledBooking = await BookingService.softDeleteBooking(bookingId, user.role === 'admin' ? 0 : user.id);
+        
+        res.json({ message: 'Booking cancelled successfully', booking: cancelledBooking });
     } catch (e) {
-        console.error('Error cancelling booking:', e);
+        if (e instanceof Error && e.message.includes('not found')) {
+            return res.status(404).json({ message: 'Booking not found or already cancelled' });
+        }
+        
         res.status(500).json({ message: 'Error cancelling booking', error: e });
     }
 });

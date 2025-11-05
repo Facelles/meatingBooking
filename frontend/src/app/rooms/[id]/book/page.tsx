@@ -40,7 +40,7 @@ export default function BookRoomPage() {
 
   const fetchRoom = useCallback(async () => {
     try {
-      const response = await api.get(`/api/rooms/${roomId}`);
+      const response = await api.get(`/rooms/${roomId}`);
       setRoom(response.data);
     } catch (error) {
       console.error('Error fetching room:', error);
@@ -77,7 +77,7 @@ export default function BookRoomPage() {
     }
 
     try {
-      await api.post('/api/bookings', {
+      await api.post('/bookings', {
         room_id: parseInt(roomId as string),
         start_time: formData.startTime,
         end_time: formData.endTime,

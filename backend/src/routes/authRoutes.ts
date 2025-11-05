@@ -8,56 +8,43 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
 
 router.post('/register', async (req: Request, res: Response) => {
-    console.log('Registration request received:', req.body);
-    
     const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
-        console.log('Missing fields:', { username: !!username, email: !!email, password: !!password });
         return res.status(400).json({ message: 'All fields required' });
     }
 
     try {
-        console.log('Checking for existing user with email:', email);
         const existUser = await prisma.user.findUnique({ where: { email } });
         if (existUser) {
-            console.log('User already exists with email:', email);
             return res.status(400).json({ message: 'Email already exists' });
         }
 
-        console.log('Getting total users count...');
         const totalUsers = await prisma.user.count();
         const role = totalUsers === 0 ? 'admin' : 'user';
-        console.log('Total users:', totalUsers, 'Assigned role:', role);
 
-        console.log('Creating new user...');
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = await prisma.user.create({ 
             data: { username, email, password: hashedPassword, role }
         });
-        console.log('User created successfully:', user.id);
 
-        console.log('Creating JWT token...');
         const token = jwt.sign(
             { id: user.id, username: user.username, email: user.email, role: user.role },
             JWT_SECRET,
             { expiresIn: '1h' }
         );
 
-        console.log('Setting cookie...');
         res.cookie('token', token, {
             httpOnly: true,
             sameSite: 'lax',
             maxAge: 1000 * 60 * 60,
         });
 
-        console.log('Sending response...');
         return res.status(201).json({
             message: 'User registered and logged in successfully',
             user: { id: user.id, username: user.username, email: user.email, role: user.role },
         });
     } catch (e: any) {
-        console.error('Registration error:', e);
         
         if (e.name === 'SequelizeValidationError') {
             const validationErrors = e.errors.map((error: any) => {

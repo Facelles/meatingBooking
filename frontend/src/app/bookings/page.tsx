@@ -41,10 +41,9 @@ export default function BookingsPage() {
     
     setLoading(true);
     try {
-      const response = await api.get('/api/bookings');
+      const response = await api.get('/bookings');
       setBookings(response.data);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
+    } catch {
       setError('Failed to load bookings');
     } finally {
       setLoading(false);
@@ -65,9 +64,8 @@ export default function BookingsPage() {
     setBookings(prevBookings => prevBookings.filter(booking => booking.id !== bookingId));
 
     try {
-      await api.delete(`/api/bookings/${bookingId}`);
+      await api.delete(`/bookings/${bookingId}`);
     } catch (error) {
-      console.error('Error canceling booking:', error);
       const axiosError = error as { response?: { data?: { message?: string } } };
       setError(axiosError.response?.data?.message || 'Failed to cancel booking');
       

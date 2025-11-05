@@ -38,7 +38,7 @@ export default function RoomsPage() {
     
     setLoading(true);
     try {
-      const response = await api.get('/api/rooms');
+      const response = await api.get('/rooms');
       setRooms(response.data);
       setFilteredRooms(response.data);
     } catch (error) {
@@ -80,7 +80,7 @@ export default function RoomsPage() {
     }
 
     try {
-      await api.delete(`/api/rooms/${roomId}`);
+      await api.delete(`/rooms/${roomId}`);
       setRooms(rooms.filter(room => room.id !== roomId));
     } catch (error) {
       console.error('Error deleting room:', error);

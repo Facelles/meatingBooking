@@ -49,13 +49,13 @@ export default function Dashboard() {
     setLoading(true);
     try {
       if (activeTab === 'rooms') {
-        const response = await api.get('/api/rooms');
+        const response = await api.get('/rooms');
         setRooms(response.data);
       } else if (activeTab === 'bookings' && user?.role === 'admin') {
-        const response = await api.get('/api/bookings');
+        const response = await api.get('/bookings');
         setBookings(response.data);
       } else if (activeTab === 'my-bookings' && user) {
-        const response = await api.get(`/api/users/${user.id}/bookings`);
+        const response = await api.get(`/bookings`);
         setBookings(response.data);
       }
     } catch (error) {
@@ -78,10 +78,23 @@ export default function Dashboard() {
 
   const cancelBooking = async (bookingId: number) => {
     try {
-      await api.delete(`/api/bookings/${bookingId}`);
+      await api.delete(`/bookings/${bookingId}`);
       fetchData(); 
     } catch (error) {
       console.error('Error cancelling booking:', error);
+    }
+  };
+
+  const deleteRoom = async (roomId: number) => {
+    if (!confirm('Are you sure you want to delete this room? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await api.delete(`/rooms/${roomId}`);
+      fetchData(); 
+    } catch (error) {
+      console.error('Error deleting room:', error);
     }
   };
 
@@ -219,12 +232,29 @@ export default function Dashboard() {
                               Owner: {room.owner.username}
                             </p>
                           </div>
-                          <button
-                            onClick={() => router.push(`/rooms/${room.id}/book`)}
-                            className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-3 rounded-xl transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                          >
-                            📋 Book Room
-                          </button>
+                          {user?.role === 'admin' ? (
+                            <div className="flex space-x-3">
+                              <button
+                                onClick={() => router.push(`/rooms/${room.id}/book`)}
+                                className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-3 rounded-xl transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                              >
+                                📋 Book Room
+                              </button>
+                              <button
+                                onClick={() => deleteRoom(room.id)}
+                                className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-3 rounded-xl transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                              >
+                                🗑️ Delete
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => router.push(`/rooms/${room.id}/book`)}
+                              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-3 rounded-xl transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                            >
+                              📋 Book Room
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}

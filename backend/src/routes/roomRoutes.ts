@@ -128,14 +128,47 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
   const user = (req as any).user;
 
   try {
-    const room = await prisma.room.findUnique({ where: { id: parseInt(req.params.id) } });
+    const room = await prisma.room.findUnique({ 
+      where: { id: parseInt(req.params.id) },
+      include: {
+        bookings: true
+      }
+    });
+    
     if (!room) return res.status(404).json({ message: 'Room not found' });
+    
     if (room.ownerId !== user.id && user.role !== 'admin') {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    await prisma.room.delete({ where: { id: parseInt(req.params.id) } });
-    res.json({ message: 'Room deleted' });
+    const activeBookings = room.bookings.filter(booking => booking.deletedAt === null);
+    
+    if (user.role === 'admin') {
+      await prisma.$transaction(async (tx) => {
+        await tx.booking.deleteMany({
+          where: { roomId: parseInt(req.params.id) }
+        });
+        
+        await tx.room.delete({
+          where: { id: parseInt(req.params.id) }
+        });
+      });
+      
+      const deletedBookingsCount = room.bookings.length;
+      res.json({ 
+        message: `Room deleted successfully. ${deletedBookingsCount} booking(s) were also deleted.`,
+        deletedBookings: deletedBookingsCount
+      });
+    } else {
+      if (activeBookings.length > 0) {
+        return res.status(400).json({ 
+          message: `Cannot delete room. It has ${activeBookings.length} active booking(s). Cancel all bookings first.` 
+        });
+      }
+      
+      await prisma.room.delete({ where: { id: parseInt(req.params.id) } });
+      res.json({ message: 'Room deleted successfully' });
+    }
   } catch (e) {
     res.status(500).json({ message: 'Error deleting room', error: e });
   }

@@ -28,7 +28,7 @@ export default function CreateRoomPage() {
     setError('');
 
     try {
-      await api.post('/api/rooms', {
+      await api.post('/rooms', {
         name: formData.name,
         capacity: parseInt(formData.capacity),
         description: formData.description

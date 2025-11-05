@@ -19,8 +19,9 @@ interface Room {
 
 interface Booking {
   id: number;
-  start_time: string;
-  end_time: string;
+  roomId: number;
+  startTime: string;
+  endTime: string;
   description?: string;
   user: {
     id: number;
@@ -51,15 +52,13 @@ export default function RoomDetailPage() {
     
     setLoading(true);
     try {
-      // Fetch room details
-      const roomResponse = await api.get(`/api/rooms/${roomId}`);
+      const roomResponse = await api.get(`/rooms/${roomId}`);
       setRoom(roomResponse.data);
 
-      // Fetch room bookings
-      const bookingsResponse = await api.get(`/api/rooms/${roomId}/bookings`);
+      const bookingsResponse = await api.get(`/bookings`);
       const now = new Date();
       const upcoming = bookingsResponse.data.filter((booking: Booking) => 
-        new Date(booking.start_time) > now
+        booking.roomId === parseInt(roomId as string) && new Date(booking.startTime) > now
       );
       setUpcomingBookings(upcoming);
     } catch (error) {
@@ -179,7 +178,7 @@ export default function RoomDetailPage() {
                       Booked by {booking.user.username}
                     </h4>
                     <span className="text-sm text-gray-500">
-                      {formatDateTime(booking.start_time)} - {formatDateTime(booking.end_time)}
+                      {formatDateTime(booking.startTime)} - {formatDateTime(booking.endTime)}
                     </span>
                   </div>
                   
